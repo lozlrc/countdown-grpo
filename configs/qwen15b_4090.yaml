@@ -1,0 +1,50 @@
+# First real takeoff attempt: Qwen2.5-1.5B base on a single RTX 4090 (24GB).
+# TinyZero reports 1.5B is the smallest scale where Countdown zero-RL works.
+# Memory (bf16): 3GB weights + 3GB grads + ~6GB AdamW state + activations.
+# TODO verify on rented GPU: minibatch_size may need to drop to 2 at
+# max_new_tokens 1024; watch nvidia-smi on the first rollout+update cycle.
+
+model:
+  name: Qwen/Qwen2.5-1.5B
+  dtype: bfloat16
+  attn_implementation: sdpa
+  gradient_checkpointing: true
+
+data:
+  template: r1
+  eval_size: 128
+
+gen:
+  group_size: 8
+  temperature: 1.0
+  top_p: 1.0
+  max_new_tokens: 1024
+
+reward:
+  mode: shaped
+  format_reward: 0.1
+  answer_reward: 1.0
+
+loss:
+  clip_eps: 0.2
+  kl_beta: 0.0   # GRPO-Zero mode; KL ablation: beta 0.001 with lr 5.0e-7
+  agg: token_mean
+  adv_use_std: true
+  filter_degenerate: true
+
+optim:
+  lr: 1.0e-6
+  grad_clip: 1.0
+  warmup_steps: 10
+
+train:
+  total_steps: 300
+  prompts_per_step: 8   # 64 sequences per step at group_size 8
+  minibatch_size: 4
+  grad_accum: 2
+  epochs_per_batch: 1
+  eval_interval: 25
+  eval_max_new_tokens: 1024
+  ckpt_interval: 50
+  device: cuda
+  out_dir: runs/qwen15b_4090

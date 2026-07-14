@@ -1,0 +1,48 @@
+# Real-model smoke test on Apple Silicon (MPS). Qwen2.5-0.5B base is known
+# NOT to learn Countdown from zero RL (TinyZero finding) — this config only
+# verifies that the pipeline runs with real weights: generation quality,
+# reward extraction on real text, memory behavior. Expect reward ~0.
+# ~2GB weights in float32; sized for a 16GB machine.
+
+model:
+  name: Qwen/Qwen2.5-0.5B
+  dtype: float32  # bf16 training on MPS is unreliable; keep fp32
+  attn_implementation: sdpa
+
+data:
+  template: r1
+  eval_size: 16
+
+gen:
+  group_size: 4
+  temperature: 1.0
+  top_p: 1.0
+  max_new_tokens: 256
+
+reward:
+  mode: shaped
+  format_reward: 0.1
+  answer_reward: 1.0
+
+loss:
+  clip_eps: 0.2
+  kl_beta: 0.0
+  agg: token_mean
+  adv_use_std: true
+  filter_degenerate: true
+
+optim:
+  lr: 1.0e-6
+  grad_clip: 1.0
+  warmup_steps: 5
+
+train:
+  total_steps: 20
+  prompts_per_step: 2
+  minibatch_size: 2  # logprob forward holds [mb, seq, 151936] float logits
+  epochs_per_batch: 1
+  eval_interval: 10
+  eval_max_new_tokens: 256
+  ckpt_interval: 20
+  device: mps
+  out_dir: runs/qwen05b_smoke

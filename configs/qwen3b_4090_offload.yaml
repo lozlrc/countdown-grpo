@@ -1,0 +1,54 @@
+# Headline model on a budget GPU: Qwen2.5-3B base on a single RTX 4090 (24GB).
+# HONEST MEMORY NOTE: bf16 3B is 6GB weights + 6GB grads + ~12GB AdamW state
+# = 24GB before activations, so plain AdamW does NOT fit. Options, in order
+# of preference when the run happens:
+#   1. bitsandbytes 8-bit AdamW (adds a dependency; ~6GB optimizer state)
+#   2. torch AdamW with fused=False and CPU-offloaded optimizer states
+#   3. rent the A100 instead (configs/qwen3b_a100.yaml) — often simpler
+# TODO verify: this config assumes option 1 is wired in before launch.
+# The training code currently instantiates plain torch.optim.AdamW.
+
+model:
+  name: Qwen/Qwen2.5-3B
+  dtype: bfloat16
+  attn_implementation: sdpa
+  gradient_checkpointing: true
+
+data:
+  template: r1
+  eval_size: 128
+
+gen:
+  group_size: 8
+  temperature: 1.0
+  top_p: 1.0
+  max_new_tokens: 1024
+
+reward:
+  mode: shaped
+  format_reward: 0.1
+  answer_reward: 1.0
+
+loss:
+  clip_eps: 0.2
+  kl_beta: 0.0
+  agg: token_mean
+  adv_use_std: true
+  filter_degenerate: true
+
+optim:
+  lr: 1.0e-6
+  grad_clip: 1.0
+  warmup_steps: 10
+
+train:
+  total_steps: 300
+  prompts_per_step: 8
+  minibatch_size: 2
+  grad_accum: 4
+  epochs_per_batch: 1
+  eval_interval: 25
+  eval_max_new_tokens: 1024
+  ckpt_interval: 50
+  device: cuda
+  out_dir: runs/qwen3b_4090

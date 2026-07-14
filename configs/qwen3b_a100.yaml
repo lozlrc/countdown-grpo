@@ -1,0 +1,50 @@
+# Headline run: Qwen2.5-3B base on a single A100-80GB. Comfortable memory
+# headroom (bf16: ~24GB params+grads+AdamW, ~5GB peak for the float logit
+# upcast at minibatch 8), so this is the low-risk path for the main result.
+# TODO verify throughput on the rented box; if steps are fast, raise
+# prompts_per_step to 16 before raising group_size.
+
+model:
+  name: Qwen/Qwen2.5-3B
+  dtype: bfloat16
+  attn_implementation: sdpa
+  gradient_checkpointing: true
+
+data:
+  template: r1
+  eval_size: 128
+
+gen:
+  group_size: 16
+  temperature: 1.0
+  top_p: 1.0
+  max_new_tokens: 1024
+
+reward:
+  mode: shaped
+  format_reward: 0.1
+  answer_reward: 1.0
+
+loss:
+  clip_eps: 0.2
+  kl_beta: 0.0
+  agg: token_mean
+  adv_use_std: true
+  filter_degenerate: true
+
+optim:
+  lr: 1.0e-6
+  grad_clip: 1.0
+  warmup_steps: 10
+
+train:
+  total_steps: 500
+  prompts_per_step: 8   # 128 sequences per step at group_size 16
+  minibatch_size: 8
+  grad_accum: 2
+  epochs_per_batch: 1
+  eval_interval: 25
+  eval_max_new_tokens: 1024
+  ckpt_interval: 50
+  device: cuda
+  out_dir: runs/qwen3b_a100

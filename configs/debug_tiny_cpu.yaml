@@ -1,0 +1,47 @@
+# Pipeline debug: tiny random-weight Qwen2-architecture model with a
+# character-level tokenizer. No downloads, runs in seconds on CPU.
+# The model learns nothing useful about Countdown; this config exists to
+# exercise every code path (rollout, reward, update, eval, checkpointing).
+
+model:
+  name: tiny-random
+  dtype: float32
+
+data:
+  template: plain  # char tokenizer has no chat template
+  nums_max: 20
+  eval_size: 8
+
+gen:
+  group_size: 4
+  temperature: 1.0
+  top_p: 1.0
+  max_new_tokens: 48
+
+reward:
+  mode: shaped
+  format_reward: 0.1
+  answer_reward: 1.0
+
+loss:
+  clip_eps: 0.2
+  kl_beta: 0.0
+  agg: token_mean
+  adv_use_std: true
+  filter_degenerate: true
+
+optim:
+  lr: 1.0e-4
+  grad_clip: 1.0
+  warmup_steps: 2
+
+train:
+  total_steps: 5
+  prompts_per_step: 2
+  minibatch_size: 4
+  epochs_per_batch: 1
+  eval_interval: 5
+  eval_max_new_tokens: 48
+  ckpt_interval: 5
+  device: cpu
+  out_dir: runs/debug_tiny
