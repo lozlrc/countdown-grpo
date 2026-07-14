@@ -75,6 +75,18 @@ def test_clip_boundaries(log_ratio, adv, expected):
     assert loss.item() == pytest.approx(expected, abs=1e-6)
 
 
+def test_clip_frac_counts_only_binding_clips():
+    old = torch.tensor([[0.0, -1.0]])
+    new = torch.tensor([[0.0, -1.0 + math.log(2.0)]])
+    mask = torch.tensor([[0.0, 1.0]])
+    # ratio 2.0 with A > 0: min() selects the clipped branch
+    _, stats = grpo_loss(new, old, torch.tensor([1.0]), mask, clip_eps=0.2)
+    assert stats["clip_frac"] == 1.0
+    # same ratio with A < 0: unclipped branch is taken, clip does not bind
+    _, stats = grpo_loss(new, old, torch.tensor([-1.0]), mask, clip_eps=0.2)
+    assert stats["clip_frac"] == 0.0
+
+
 def test_kl_zero_equals_no_ref():
     new, old, adv, mask = make_inputs()
     ref = old - 0.3

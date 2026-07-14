@@ -74,9 +74,9 @@ def grpo_loss(
         loss = (per_token * mask).sum() / (per_token.shape[0] * max_tokens)
 
     with torch.no_grad():
-        clip_frac = _masked_scalar(
-            ((ratio - 1.0).abs() > clip_eps).float(), mask
-        )
+        # clipping binds only where min() selects the clipped branch (e.g.
+        # A < 0 with ratio > 1+eps still takes the unclipped term)
+        clip_frac = _masked_scalar((clipped < unclipped).float(), mask)
         # k2-style estimate of KL(pi_theta || pi_old), for monitoring drift
         approx_kl = _masked_scalar((ratio - 1.0) - log_ratio, mask)
 
