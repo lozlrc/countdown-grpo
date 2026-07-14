@@ -39,15 +39,22 @@ class RolloutBatch:
 
 
 def token_logprobs(
-    model, input_ids: torch.Tensor, attention_mask: torch.Tensor
+    model,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    temperature: float = 1.0,
 ) -> torch.Tensor:
     """Per-token logprob of input_ids[:, t] given the prefix, [N, T].
+
+    temperature must match the sampling temperature: generate draws from
+    softmax(logits / T), so scoring raw logits against those samples would
+    silently bias the surrogate off-policy for any T != 1.
 
     Column 0 has no prediction and is set to 0; it is always a prompt token
     and masked out downstream.
     """
     logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
-    logits = logits[:, :-1, :].float()
+    logits = logits[:, :-1, :].float() / temperature
     targets = input_ids[:, 1:]
     logps = F.log_softmax(logits, dim=-1)
     logps = logps.gather(-1, targets.unsqueeze(-1)).squeeze(-1)
@@ -60,6 +67,7 @@ def batched_token_logprobs(
     input_ids: torch.Tensor,
     attention_mask: torch.Tensor,
     minibatch_size: int,
+    temperature: float = 1.0,
 ) -> torch.Tensor:
     """token_logprobs in no-grad minibatches (keeps peak memory bounded)."""
     outs = []
@@ -70,6 +78,7 @@ def batched_token_logprobs(
                     model,
                     input_ids[i : i + minibatch_size],
                     attention_mask[i : i + minibatch_size],
+                    temperature=temperature,
                 )
             )
     return torch.cat(outs, dim=0)
@@ -92,6 +101,11 @@ def sample_rollouts(
     logprob_minibatch: int = 8,
 ) -> RolloutBatch:
     """Sample group_size completions per prompt and score old logprobs."""
+    if gen_cfg.top_p != 1.0:
+        raise ValueError(
+            "top_p != 1.0 truncates the sampling distribution in a way the "
+            "logprob computation cannot account for; use temperature instead"
+        )
     was_training = model.training
     model.eval()
 
@@ -124,7 +138,11 @@ def sample_rollouts(
     )
 
     old_logprobs = batched_token_logprobs(
-        model, sequences, attention_mask, logprob_minibatch
+        model,
+        sequences,
+        attention_mask,
+        logprob_minibatch,
+        temperature=gen_cfg.temperature,
     )
 
     completions = tokenizer.batch_decode(completion_ids, skip_special_tokens=True)

@@ -93,7 +93,9 @@ check a sampled transcript before burning more hours.
 - **NaN loss**: the loop raises immediately (by design). Halve `optim.lr`,
   resume from `ckpt_last.pt`.
 - **Entropy collapse** (repeated tokens, `mean_action_logprob` drifting
-  toward 0, all-identical completions): raise temperature to 1.2, or add
+  toward 0, all-identical completions): raise temperature to 1.2 (safe:
+  the sampling temperature is folded into old/new/ref logprobs, so the
+  update stays on-policy; `top_p` must stay 1.0), or add
   the KL term (`kl_beta: 0.001` with `lr: 5.0e-7` — philschmid's stable
   setting; beta 0.04 from the original GRPO paper is documented unstable
   at these scales).

@@ -34,7 +34,7 @@ class DataCfg:
 class GenCfg:
     group_size: int = 8
     temperature: float = 1.0
-    top_p: float = 1.0
+    top_p: float = 1.0  # must stay 1.0 for training (see rollout.sample_rollouts)
     max_new_tokens: int = 512
 
 

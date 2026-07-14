@@ -56,7 +56,10 @@ def grpo_update(
         pending = 0
         for k, idx in enumerate(minibatches):
             logprobs = token_logprobs(
-                model, batch.sequences[idx], batch.attention_mask[idx]
+                model,
+                batch.sequences[idx],
+                batch.attention_mask[idx],
+                temperature=cfg.gen.temperature,
             )
             loss, stats = grpo_loss(
                 logprobs=logprobs,
@@ -266,7 +269,11 @@ def train(cfg: Config, resume: str | None = None) -> None:
             ref_logprobs = None
             if ref_model is not None:
                 ref_logprobs = batched_token_logprobs(
-                    ref_model, sub.sequences, sub.attention_mask, cfg.train.minibatch_size
+                    ref_model,
+                    sub.sequences,
+                    sub.attention_mask,
+                    cfg.train.minibatch_size,
+                    temperature=cfg.gen.temperature,
                 )
             metrics.update(grpo_update(model, optimizer, sub, sub_adv, cfg, ref_logprobs))
         else:
