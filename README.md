@@ -15,10 +15,15 @@ testable.
 
 - This repo makes **no emergence claims**. Self-reflection phrasing
   ("wait, let me reconsider") already exists in Qwen2.5 *base* models
-  before any RL, as shown by oat-zero. The claim being replicated is
-  narrower and measurable: outcome-reward GRPO lifts Countdown accuracy
-  from near-zero to a nontrivial level at 1.5B-3B scale, with the known
-  reward curve shape (format first, then accuracy).
+  before any RL — measured here, not just asserted: **36.7%** of base
+  Qwen2.5-0.5B completions already use verification / backtracking /
+  enumeration language at step 0, while answer accuracy is **0.0%** (see
+  [Step-0 behavioral analysis](#step-0-behavioral-analysis-base-model-no-rl)
+  below). So RL *amplifies* pre-existing reasoning language rather than
+  creating it. The claim being replicated is narrower and measurable:
+  outcome-reward GRPO lifts Countdown accuracy from near-zero to a nontrivial
+  level at 1.5B-3B scale, with the known reward curve shape (format first,
+  then accuracy).
 - Qwen2.5-0.5B is used only for pipeline debugging: TinyZero reports it
   fails to learn Countdown from zero RL, and nothing here contradicts that.
 - Implementation and tests are done and green (below). The GPU training
@@ -113,6 +118,7 @@ uv run python scripts/smoke_qwen.py                       # downloads 0.5B, runs
 - [x] Safe Countdown reward + puzzle generator
 - [x] Test suite green, including e2e policy improvement
 - [x] Local real-model smoke on MPS (Qwen2.5-0.5B, see below)
+- [x] Step-0 behavioral analysis — self-reflection language pre-exists in the base model (measured, see below)
 - [ ] 1.5B first-takeoff run on rented 4090 (`RUNBOOK.md`)
 - [ ] 3B headline run + ablation matrix
 - [ ] Reward-curve comparison against TinyZero public wandb
@@ -126,6 +132,35 @@ already produces well-formed `<think>/<answer>` tags, consistent with
 oat-zero's observation that the format pre-exists in the base model),
 answer rate 0.000. Reward extraction, masking, and logprob bookkeeping
 all behave on real generations.
+
+### Step-0 behavioral analysis (base model, no RL)
+
+Does the "aha moment" come from RL, or is it already there?
+`scripts/behavioral_step0.py` samples the **untrained** base model on 128
+Countdown prompts (r1 template, M2 Pro / MPS, ~3.5 min) and counts
+cognitive-behavior language in what it generates *before a single gradient step*:
+
+| metric (base Qwen2.5-0.5B, 128 completions) | value |
+| --- | --- |
+| answer accuracy | **0.0%** |
+| well-formed `<think>/<answer>` | 14.8% |
+| **any** verification / backtracking / enumeration language | **36.7%** |
+| — verification ("check", "is this right", "which equals") | 25.0% |
+| — enumeration ("let me try", "another way", "what if") | 18.0% |
+| — backtracking ("wait", "actually", "instead") | 5.5% |
+
+The base model already self-checks and revises — e.g. *"25 + 48 = 73 and then
+73 / 11 = 6.63… (as you can see, the answer is not exact… to make it closer to
+62, I can multiply…)"* — while solving **none** of the puzzles. So the reasoning
+*language* pre-exists (the oat-zero / SimpleRL-Zoo observation, reproduced on
+this model); RL's job is to make that behavior *effective*, not to invent it.
+This is why a rising response length during training is not, by itself, evidence
+of emergence — and why the headline run is scored on **accuracy**, not length.
+
+Caveats: the rates are a lexicon-based proxy (conservative word-boundary
+patterns, counted only in the completion, not the prompt), and 0.5B is the
+weakest base model — running the same script on the 1.5B/3B checkpoints is part
+of the GPU runbook. Reproduce: `uv run python scripts/behavioral_step0.py`.
 
 ## References
 

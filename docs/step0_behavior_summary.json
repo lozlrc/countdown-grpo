@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B",
+  "n_completions": 128,
+  "mean_tok_len": 168.9140625,
+  "format_ok_rate": 0.1484375,
+  "answer_ok_rate": 0.0,
+  "behavior_any_rate": 0.3671875,
+  "behavior_verification_rate": 0.25,
+  "behavior_backtracking_rate": 0.0546875,
+  "behavior_enumeration_rate": 0.1796875
+}
