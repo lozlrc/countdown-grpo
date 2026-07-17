@@ -119,7 +119,8 @@ uv run python scripts/smoke_qwen.py                       # downloads 0.5B, runs
 - [x] Test suite green, including e2e policy improvement
 - [x] Local real-model smoke on MPS (Qwen2.5-0.5B, see below)
 - [x] Step-0 behavioral analysis — self-reflection language pre-exists in the base model (measured, see below)
-- [ ] 1.5B first-takeoff run on rented 4090 (`RUNBOOK.md`)
+- [x] 1.5B baseline run on a rented 4090 — **completed, honestly flat** (format learned, accuracy did not take off; measured result + diagnosis below)
+- [ ] 1.5B tuned rerun (`configs/qwen15b_4090_v2.yaml` — lr 3e-6, G=16, temp 1.1; aborted at 26/300 steps on budget, config committed for the rerun)
 - [ ] 3B headline run + ablation matrix
 - [ ] Reward-curve comparison against TinyZero public wandb
 
@@ -161,6 +162,42 @@ Caveats: the rates are a lexicon-based proxy (conservative word-boundary
 patterns, counted only in the completion, not the prompt), and 0.5B is the
 weakest base model — running the same script on the 1.5B/3B checkpoints is part
 of the GPU runbook. Reproduce: `uv run python scripts/behavioral_step0.py`.
+
+## 1.5B GPU baseline (measured — honestly flat)
+
+One full baseline run on a rented RTX 4090 (Qwen2.5-1.5B base,
+`configs/qwen15b_4090.yaml` unmodified: lr 1e-6, G=8, 300 steps, ~41 s/step,
+~3.5 h, ~$3 of compute):
+
+![1.5B baseline training curves](docs/curve_qwen15b_baseline.png)
+
+| held-out eval (greedy, 128 puzzles) | step 25 | step 50 | step 150 | step 300 |
+| --- | --- | --- | --- | --- |
+| format rate | 0.812 | 0.945 | 0.945 | **0.953** |
+| answer accuracy | 0.023 | 0.016 | 0.016 | **0.023** |
+
+**What happened:** the first half of the classic R1-Zero curve reproduced on
+schedule — well-formed `<think>/<answer>` output was learned by step 50 and held
+at ~95%. The second half did not: answer accuracy stayed at the base model's
+~2% for all 300 steps. Raw data: `docs/runs/qwen15b_baseline_metrics.jsonl`.
+
+**Diagnosis** (from the run's own telemetry, not speculation):
+
+- `clip_frac ≈ 0.0005` all run — updates never approached the PPO trust-region
+  boundary, i.e. lr 1e-6 (the stability-first setting from the references) is
+  far too timid at this scale to compound the sparse successes.
+- The solve signal is structurally sparse at 1.5B: at a ~1% answer rate, a
+  group of G=8 completions contains a correct answer ~8% of the time, and once
+  format saturates, the remaining groups carry near-zero advantage variance.
+  RL can only amplify what sampling finds, and 1.5B rarely finds a solution.
+
+**Follow-ups:** the tuned config attacking exactly those two levers
+(`qwen15b_4090_v2.yaml`: lr 3e-6, G=16, temperature 1.1) was launched and
+aborted at 26/300 steps for budget — too early to conclude anything
+(partial metrics committed). The 3B run (`qwen3b_a100.yaml`) is the scale the
+reference milestones were calibrated on and remains the planned headline.
+This section stays in the README either way: a flat baseline with a measured
+diagnosis is the control arm, not a failure.
 
 ## References
 

@@ -1,0 +1,54 @@
+# Run 2: tuned takeoff attempt after the flat baseline (qwen15b_4090.yaml).
+# Diagnosis from run 1: clip_frac ~0.0005 (updates far inside the trust region,
+# i.e. lr 1e-6 is timid) and a sparse correct-sample signal (answer_rate ~1%
+# means most groups contain no correct completion, so they carry no solve
+# gradient once format saturates). Levers: 3x lr, G 8->16 for denser
+# within-group contrast (prompts 8->4 keeps 64 seqs/step and the same memory),
+# temperature 1.1 for more exploration.
+#
+# Status: run aborted at 26/300 steps for budget (see README) — committed so
+# the rerun is one command. Partial metrics: docs/runs/qwen15b_tuned_partial_metrics.jsonl.
+model:
+  name: Qwen/Qwen2.5-1.5B
+  dtype: bfloat16
+  attn_implementation: sdpa
+  gradient_checkpointing: true
+
+data:
+  template: r1
+  eval_size: 128
+
+gen:
+  group_size: 16
+  temperature: 1.1
+  top_p: 1.0
+  max_new_tokens: 1024
+
+reward:
+  mode: shaped
+  format_reward: 0.1
+  answer_reward: 1.0
+
+loss:
+  clip_eps: 0.2
+  kl_beta: 0.0
+  agg: token_mean
+  adv_use_std: true
+  filter_degenerate: true
+
+optim:
+  lr: 3.0e-6
+  grad_clip: 1.0
+  warmup_steps: 10
+
+train:
+  total_steps: 300
+  prompts_per_step: 4   # 64 sequences per step at group_size 16
+  minibatch_size: 4
+  grad_accum: 2
+  epochs_per_batch: 1
+  eval_interval: 25
+  eval_max_new_tokens: 1024
+  ckpt_interval: 50
+  device: cuda
+  out_dir: runs/qwen15b_4090_v2
