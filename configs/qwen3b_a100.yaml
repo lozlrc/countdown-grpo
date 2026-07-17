@@ -1,10 +1,24 @@
-# Headline run: Qwen2.5-3B base on a single A100-80GB. Memory: ~24GB
-# params+grads+AdamW in bf16, plus ~15GB transient for the logit chain at
-# minibatch 8 during the grad-tracked update (bf16 logits + fp32 upcast +
-# saved log_softmax, each ~3-6GB at 152k vocab x ~1.2k tokens) — still
-# comfortable on 80GB, so this is the low-risk path for the main result.
-# TODO verify throughput on the rented box; if steps are fast, raise
-# prompts_per_step to 16 before raising group_size.
+# Headline run: Qwen2.5-3B base on a single A100-80GB.
+#
+# Revised after the flat 1.5B baseline + a re-read of the reference configs
+# (see README "What the references actually did"):
+#   - prompts_per_step 8 -> 24: the single biggest gap vs the references was
+#     effective batch (TinyZero: 256 prompts/update with a PPO critic;
+#     DeepSeekMath GRPO: ~1024). More prompts per update = more groups that
+#     contain a correct sample = denser solve gradient and less update noise.
+#   - kl_beta 0 -> 0.001: both configs that took off on Countdown (TinyZero,
+#     mini-R1) used a small KL anchor. Costs a frozen ref model (~6GB bf16,
+#     fine on 80GB) and one extra logprob pass.
+#   - lr stays 1e-6: mini-R1 took off at 5e-7 on 3B — scale/signal density,
+#     not lr, is the takeoff driver; keep the conservative setting with KL on.
+#
+# Memory: ~24GB params+grads+AdamW (bf16) + ~6GB ref model + ~15GB transient
+# logit chain at minibatch 8 — comfortable on 80GB.
+# Throughput: expect ~90-150s/step at 24x16=384 seqs/step; 300 steps first
+# (checkpoint+resume), extend to 500 only if the curve is still climbing.
+# Fallback if base starves (answer_rate ~0 and degenerate_frac rising by step
+# ~100): switch model.name to Qwen/Qwen2.5-3B-Instruct and restart — the
+# mini-R1-proven path (document the base-vs-instruct outcome either way).
 
 model:
   name: Qwen/Qwen2.5-3B
@@ -29,7 +43,7 @@ reward:
 
 loss:
   clip_eps: 0.2
-  kl_beta: 0.0
+  kl_beta: 0.001
   agg: token_mean
   adv_use_std: true
   filter_degenerate: true
@@ -40,13 +54,15 @@ optim:
   warmup_steps: 10
 
 train:
-  total_steps: 500
-  prompts_per_step: 8   # 128 sequences per step at group_size 16
+  total_steps: 300
+  prompts_per_step: 24   # 384 sequences per step at group_size 16
   minibatch_size: 8
-  grad_accum: 2
+  grad_accum: 12         # 384 seqs = 48 minibatches of 8; accum 12 -> 4 optimizer
+                         # steps per rollout batch of 96 seqs each (mirrors
+                         # TinyZero's batch-256 / ppo-mini-batch-64 granularity)
   epochs_per_batch: 1
   eval_interval: 25
   eval_max_new_tokens: 1024
-  ckpt_interval: 50
+  ckpt_interval: 25
   device: cuda
   out_dir: runs/qwen3b_a100
