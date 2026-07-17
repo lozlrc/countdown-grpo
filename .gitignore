@@ -10,6 +10,6 @@ wheels/
 .venv
 
 # Training outputs
-runs/
+/runs/
 wandb/
 *.pt
