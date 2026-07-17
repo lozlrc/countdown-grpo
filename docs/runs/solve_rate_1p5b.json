@@ -1,0 +1,31 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B",
+  "temperature": 1.0,
+  "max_new_tokens": 512,
+  "slices": {
+    "3num_small": {
+      "pass_at_1": 0.0,
+      "pass_at_G": 0.0,
+      "signal_at_G": 0.0,
+      "format_rate": 0.296875,
+      "n_puzzles": 48,
+      "group_size": 8
+    },
+    "3num": {
+      "pass_at_1": 0.0026041666666666665,
+      "pass_at_G": 0.020833333333333332,
+      "signal_at_G": 0.020833333333333332,
+      "format_rate": 0.2916666666666667,
+      "n_puzzles": 48,
+      "group_size": 8
+    },
+    "4num": {
+      "pass_at_1": 0.0,
+      "pass_at_G": 0.0,
+      "signal_at_G": 0.0,
+      "format_rate": 0.2526041666666667,
+      "n_puzzles": 48,
+      "group_size": 8
+    }
+  }
+}

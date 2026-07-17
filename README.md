@@ -199,6 +199,53 @@ reference milestones were calibrated on and remains the planned headline.
 This section stays in the README either way: a flat baseline with a measured
 diagnosis is the control arm, not a failure.
 
+## Why 1.5B stayed flat: measured signal density
+
+GRPO's solve gradient exists only in groups that contain at least one — and
+not all — correct completions. `scripts/solve_rate_by_difficulty.py` measures
+how often that happens for the **untrained base model**, per difficulty slice
+(G=8 samples per puzzle, r1 template, MPS; raw JSON in `docs/runs/`):
+
+| slice | 1.5B-base signal@8 | 3B-base signal@8 |
+| --- | --- | --- |
+| 3 numbers, values ≤30 | 0.0% | 12% |
+| 3 numbers, full range | 2.1% | **28%** |
+| 4 numbers | 0.0% | 3% |
+
+Base 1.5B produces essentially nothing to amplify on *any* slice — including
+the easiest — which closes the case on the flat baseline (and rules out both a
+difficulty curriculum and hyperparameter rescues at this scale: the fuel tank
+is empty). Base 3B has real fuel on 3-number puzzles, a meaningful difficulty
+gradient (28% vs 3%), and a much higher zero-shot format rate (~51% vs ~29%).
+At the revised A100 config (G=16, 24 prompts/step) that is roughly 7–9
+informative groups per step versus the baseline run's ~0.5. If the mixed
+(3,4) task still stalls, training on 3-number puzzles first (config knob
+`data.num_counts`) is now an evidence-backed curriculum, not a guess.
+
+## What the references actually did (and where this repo deviated)
+
+Re-reading the sources after the flat baseline, the successful runs differ
+from this repo's run 1 more than the "TinyZero-style" shorthand suggests:
+
+| | algorithm | model | prompts/update | KL | outcome |
+| --- | --- | --- | --- | --- | --- |
+| TinyZero | **PPO + critic** | 3B **base** | **256** | 0.001 | takeoff |
+| philschmid mini-R1 | GRPO (TRL) | 3B **Instruct** | ~8 | 0.001 | 25%@100 |
+| GRPO-Zero | GRPO, no KL | 3B **Instruct** | ~32 | 0 | works |
+| this repo, run 1 | GRPO, no KL | 1.5B base | 8 | 0 | flat |
+
+Three observations. TinyZero's headline script is PPO with a learned critic —
+every token gets a value-function gradient, so the group-sparsity failure mode
+of GRPO doesn't apply, and its batch (256 prompts/update) finds correct
+samples every step even at a low solve rate. The GRPO successes started from
+Instruct models, i.e. with high signal density from step one. And DAPO
+(arXiv:2503.14476) formalizes exactly the failure observed here — degenerate
+groups carry zero gradient under centering — fixing it by resampling until the
+batch is full of informative groups. Run 1 sat outside every reference's
+demonstrated envelope on three axes at once (GRPO + small batch + small base
+model); the revised `qwen3b_a100.yaml` (3B, 24 prompts/step, KL 0.001) moves
+back inside it while keeping the base-model R1-Zero framing.
+
 ## References
 
 - DeepSeekMath: GRPO — arXiv:2402.03300
