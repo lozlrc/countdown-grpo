@@ -120,9 +120,10 @@ uv run python scripts/smoke_qwen.py                       # downloads 0.5B, runs
 - [x] Local real-model smoke on MPS (Qwen2.5-0.5B, see below)
 - [x] Step-0 behavioral analysis — self-reflection language pre-exists in the base model (measured, see below)
 - [x] 1.5B baseline run on a rented 4090 — **completed, honestly flat** (format learned, accuracy did not take off; measured result + diagnosis below)
-- [ ] 1.5B tuned rerun (`configs/qwen15b_4090_v2.yaml` — lr 3e-6, G=16, temp 1.1; aborted at 26/300 steps on budget, config committed for the rerun)
-- [ ] 3B headline run + ablation matrix
-- [ ] Reward-curve comparison against TinyZero public wandb
+- [x] Signal-density measurement across model scales + reference re-read → revised 3B config (below)
+- [x] **3B headline run on a rented A100 — takeoff reproduced**: held-out accuracy 2.3% → **16.4% peak** (7×), plateauing ~12–16% by step 225 (measured result below)
+- [ ] 1.5B tuned rerun (`configs/qwen15b_4090_v2.yaml`; aborted at 26/300 steps on budget)
+- [ ] Ablation matrix (group size, KL, reward decomposition) — future GPU budget
 
 ### MPS smoke result (Qwen2.5-0.5B base, untrained)
 
@@ -245,6 +246,36 @@ batch is full of informative groups. Run 1 sat outside every reference's
 demonstrated envelope on three axes at once (GRPO + small batch + small base
 model); the revised `qwen3b_a100.yaml` (3B, 24 prompts/step, KL 0.001) moves
 back inside it while keeping the base-model R1-Zero framing.
+
+## 3B takeoff (measured — the headline run)
+
+Qwen2.5-3B **base** on a rented A100-80GB, `configs/qwen3b_a100.yaml` as
+committed (24 prompts × G=16 = 384 sequences/step, KL 0.001, lr 1e-6,
+~350 s/step, ~$31 of GPU). Run ended at step 227 when the rental credit ran
+out — after 125 steps of plateau, so nothing was left on the table. Raw
+metrics: `docs/runs/qwen3b_a100_metrics.jsonl`.
+
+![3B training curves](docs/curve_qwen3b_a100.png)
+
+| held-out eval (greedy, 128 puzzles) | step 25 | 50 | 75 | **100** | 125 | 150 | 175 | 200 | 225 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| answer accuracy | 6.2% | 8.6% | 9.4% | **16.4%** | 12.5% | 11.7% | 15.6% | 14.1% | 14.8% |
+| format rate | 62% | 59% | 64% | 70% | 61% | 67% | 69% | 72% | 66% |
+
+**The takeoff is real and the diagnosis held.** The same trainer that stayed
+flat at 1.5B (2.3% for 300 steps) lifted 3B from a 2.3% zero-shot baseline to
+a 12–16% band — first eval already at 6.2%, peak 16.4% at step 100 — because
+3B's measured signal density (28% of groups informative on 3-number puzzles)
+gives GRPO something to amplify. Accuracy then oscillates rather than
+compounding further: at ~4% temperature-1.0 solve rate, informative groups
+remain a minority, and the ±3% band is consistent with eval noise (n=128)
+around a slow grind. The references that pushed higher used an Instruct base,
+a critic, or dynamic resampling — all documented above as the next levers.
+
+Honest caveats: one seed, one run; peak vs. plateau reported separately
+(16.4% peak, ~14% settled); completion length *shrank* (485 → ~210 tokens)
+while accuracy rose — on Countdown, efficient search beats long rambling,
+which is another reason response length is a poor proxy for reasoning.
 
 ## References
 
